@@ -5,6 +5,16 @@ REM ========================================
 REM This script automatically connects to a WiFi network
 REM Edit the SSID and PASSWORD variables below
 
+REM Check for administrator rights
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [WARNUNG] Dieses Script sollte als Administrator ausgefuehrt werden!
+    echo Rechtsklick -^> "Als Administrator ausfuehren"
+    echo.
+    pause
+    exit /b 1
+)
+
 REM === CONFIGURATION ===
 REM Set your WiFi network name (SSID)
 set "SSID=Geraete"
@@ -27,7 +37,9 @@ echo ========================================
 echo     WiFi Auto-Connect Script
 echo ========================================
 echo.
-echo Connecting to: %SSID%
+echo Netzwerk: %SSID%
+echo Authentifizierung: %AUTH%
+echo Verschluesselung: %ENCRYPTION%
 echo.
 
 REM Create temporary XML profile file
@@ -64,34 +76,64 @@ echo ^</WLANProfile^>
 ) > "%XML_FILE%"
 
 REM Add the WiFi profile
-echo Adding WiFi profile...
-netsh wlan add profile filename="%XML_FILE%" user=current >nul 2>&1
+echo Fuege WiFi-Profil hinzu...
+netsh wlan add profile filename="%XML_FILE%" user=current
 
 if %errorlevel% neq 0 (
-    echo [ERROR] Failed to add WiFi profile. Run as Administrator.
+    echo [FEHLER] WiFi-Profil konnte nicht hinzugefuegt werden.
+    echo Moegliche Ursachen:
+    echo - Script muss als Administrator ausgefuehrt werden
+    echo - Ungueltige Konfiguration
     goto :cleanup
 )
 
-echo WiFi profile added successfully.
+echo WiFi-Profil erfolgreich hinzugefuegt.
 echo.
 
 REM Connect to the network
-echo Connecting to %SSID%...
-netsh wlan connect name="%SSID%" >nul 2>&1
+echo Verbinde mit %SSID%...
+netsh wlan connect name="%SSID%" 2>nul
 
 if %errorlevel% neq 0 (
-    echo [ERROR] Failed to connect. Make sure WiFi is enabled and network is in range.
-    goto :cleanup
+    echo.
+    echo [WARNUNG] Standortberechtigungen erforderlich!
+    echo.
+    echo Windows 11 benoetigt Standortdienste fuer WLAN-Verbindungen.
+    echo.
+    echo Bitte aktiviere Standortdienste:
+    echo 1. Oeffne Einstellungen (wird automatisch geoeffnet)
+    echo 2. Gehe zu: Datenschutz ^& Sicherheit -^> Standort
+    echo 3. Aktiviere "Standortdienste"
+    echo 4. Aktiviere "Apps den Zugriff auf Ihren Standort erlauben"
+    echo.
+    echo Oeffne Standort-Einstellungen...
+    start ms-settings:privacy-location
+    echo.
+    echo Druecke eine Taste nachdem du Standortdienste aktiviert hast...
+    pause >nul
+    echo.
+    echo Versuche erneut zu verbinden...
+    netsh wlan connect name="%SSID%"
+    if %errorlevel% neq 0 (
+        echo.
+        echo [FEHLER] Verbindung fehlgeschlagen.
+        echo Moegliche Ursachen:
+        echo - Standortdienste noch nicht aktiviert
+        echo - Netzwerk ist nicht in Reichweite
+        echo - WLAN ist ausgeschaltet
+        echo - Falsches Passwort
+        goto :cleanup
+    )
 )
 
 echo.
-echo [SUCCESS] Connected to %SSID%!
+echo [ERFOLG] Verbunden mit %SSID%!
 echo.
 
 REM Wait a moment and check connection status
 timeout /t 3 /nobreak >nul
-echo Current WiFi Status:
-echo -------------------
+echo Aktueller WiFi-Status:
+echo ----------------------
 netsh wlan show interfaces | findstr /C:"SSID" /C:"State" /C:"Signal"
 
 :cleanup
@@ -100,6 +142,6 @@ if exist "%XML_FILE%" del /f /q "%XML_FILE%" >nul 2>&1
 
 echo.
 echo ========================================
-echo Script completed.
+echo Script abgeschlossen.
 echo ========================================
 pause
